@@ -1,7 +1,7 @@
 import WalletConnectProvider from "@walletconnect/web3-provider";
 //import Torus from "@toruslabs/torus-embed"
 import WalletLink from "walletlink";
-import { Alert, Button, Col, Menu, Row, List } from "antd";
+import { Alert, Button, Col, Menu, Row, List, Divider } from "antd";
 import "antd/dist/antd.css";
 import React, { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, Route, Switch } from "react-router-dom";
@@ -28,6 +28,7 @@ import Portis from "@portis/web3";
 import Fortmatic from "fortmatic";
 import Authereum from "authereum";
 import humanizeDuration from "humanize-duration";
+import { Price } from "@uniswap/sdk";
 
 const { ethers } = require("ethers");
 /*
@@ -163,7 +164,7 @@ const web3Modal = new Web3Modal({
   },
 });
 
-function App(props) {
+function App() {
   const mainnetProvider =
     poktMainnetProvider && poktMainnetProvider._isProvider
       ? poktMainnetProvider
@@ -256,6 +257,9 @@ function App(props) {
   const threshold = useContractReader(readContracts, "Staker", "threshold");
   console.log("💵 threshold:", threshold);
 
+  const rewardRatePerSecond = useContractReader(readContracts, "Staker", "rewardRatePerSecond");
+  console.log("💵 Reward Rate:", rewardRatePerSecond);
+
   // ** keep track of a variable from the contract in the local React state:
   const balanceStaked = useContractReader(readContracts, "Staker", "balances", [address]);
   console.log("💸 balanceStaked:", balanceStaked);
@@ -265,12 +269,18 @@ function App(props) {
   console.log("📟 stake events:", stakeEvents);
 
   // ** keep track of a variable from the contract in the local React state:
-  const timeLeft = useContractReader(readContracts, "Staker", "timeLeft");
-  console.log("⏳ timeLeft:", timeLeft);
+  const claimPeriodLeft = useContractReader(readContracts, "Staker", "claimPeriodLeft");
+  console.log("⏳ Claim Period Left:", claimPeriodLeft);
 
-  // ** Listen for when the contract has been 'completed'
+  const withdrawalTimeLeft = useContractReader(readContracts, "Staker", "withdrawalTimeLeft");
+  console.log("⏳ Withdrawal Time Left:", withdrawalTimeLeft);
+
+  // ** Listen for when the contract has been 'completed or claimed'
   const complete = useContractReader(readContracts, "ExampleExternalContract", "completed");
   console.log("✅ complete:", complete);
+
+  const claimed = useContractReader(readContracts, "ExampleExternalContract", "claimed");
+  console.log("✅ claimed:", claimed);
 
   const exampleExternalContractBalance = useBalance(
     localProvider,
@@ -279,11 +289,31 @@ function App(props) {
   if (DEBUG) console.log("💵 exampleExternalContractBalance", exampleExternalContractBalance);
 
   let completeDisplay = "";
+
   if (complete) {
     completeDisplay = (
-      <div style={{ padding: 64, backgroundColor: "#eeffef", fontWeight: "bolder", color: "rgba(0, 0, 0, 0.85)" }}>
-        🚀 🎖 👩‍🚀 -- Staking App triggered `ExampleExternalContract` -- 🎉 🍾 🎊
-        <Balance balance={exampleExternalContractBalance} fontSize={64} /> ETH staked!
+      <div style={{ padding: 222, backgroundColor: "#inherit", fontWeight: "bolder", color: "rgba(36, 160, 0, 0.85)" }}>
+        <div>💀⛓ --- Staking App 🔒 Lock triggered --- 💵⚠️</div>
+        Staking App contract funding period:("✅ Completed")
+        <div>
+          <Balance balance={exampleExternalContractBalance} fontSize={32} />
+          Ethers have been locked for Repatraition!
+        </div>
+      </div>
+    );
+  }
+
+  let claimedDisplay = "";
+
+  if (claimed) {
+    claimedDisplay = (
+      <div style={{ padding: 222, backgroundColor: "#inherit", fontWeight: "bolder", color: "rgba(36, 160, 0, 0.85)" }}>
+        <div>🚀⛓ --- Staking App 🔐 Claim triggered --- 💵🎉</div>
+        Staking App contract funding period:("✅ Completed")
+        <div>
+          <Balance balance={exampleExternalContractBalance} fontSize={32} />
+          Ethers have been claimed and sent to wallet!
+        </div>
       </div>
     );
   }
@@ -410,7 +440,7 @@ function App(props) {
     }
   } else {
     networkDisplay = (
-      <div style={{ zIndex: -1, position: "absolute", right: 154, top: 28, padding: 16, color: targetNetwork.color }}>
+      <div style={{ zIndex: -1, position: "fixed", right: 30, top: 18, padding: 3, color: targetNetwork.color }}>
         {targetNetwork.name}
       </div>
     );
@@ -467,12 +497,12 @@ function App(props) {
           onClick={() => {
             faucetTx({
               to: address,
-              value: ethers.utils.parseEther("0.01"),
+              value: ethers.utils.parseEther("250"),
             });
             setFaucetClicked(true);
           }}
         >
-          💰 Grab funds from the faucet ⛽️
+          💰 Grab funds from the faucet 💧
         </Button>
       </div>
     );
@@ -510,81 +540,82 @@ function App(props) {
         <Switch>
           <Route exact path="/">
             {completeDisplay}
-
-            <div style={{ padding: 8, marginTop: 32 }}>
-              <div>Staker Contract:</div>
-              <Address value={readContracts && readContracts.Staker && readContracts.Staker.address} />
+            <div style={{ padding: 1 }}>
+              Total Available ETH in Contract:
+              <Balance balance={stakerContractBalance} fontSize={32} /> / <Balance balance={threshold} fontSize={32} />Ξ
             </div>
-
-            <div style={{ padding: 8, marginTop: 32 }}>
-              <div>Timeleft:</div>
-              {timeLeft && humanizeDuration(timeLeft.toNumber() * 1000)}
+            <div style={{ padding: 1 }}>
+              Staker Contract Address:{" "}
+              <Address value={readContracts && readContracts.Staker && readContracts.Staker.address} /> @RRPBS:{" "}
+              <Balance balance={rewardRatePerSecond} fontSize={32} />Ξ
             </div>
-
-            <div style={{ padding: 8 }}>
-              <div>Total staked:</div>
-              <Balance balance={stakerContractBalance} fontSize={64} />/<Balance balance={threshold} fontSize={64} />
-            </div>
-
-            <div style={{ padding: 8 }}>
-              <div>You staked:</div>
-              <Balance balance={balanceStaked} fontSize={64} />
-            </div>
-
-            <div style={{ padding: 8 }}>
+            <div style={{ padding: 3 }}>
               <Button
-                type={"default"}
+                type={balanceStaked ? "success" : "primary"}
                 onClick={() => {
-                  tx(writeContracts.Staker.execute());
+                  tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther(".01") }));
                 }}
               >
-                📡 Execute!
+                🥓 Stake .01 ether!
               </Button>
             </div>
-
-            <div style={{ padding: 8 }}>
+            <div style={{ padding: 3 }}>
+              <Button
+                type={balanceStaked ? "success" : "primary"}
+                onClick={() => {
+                  tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther(".10") }));
+                }}
+              >
+                ♨️ Stake .10 ether!
+              </Button>
+            </div>
+            <div style={{ padding: 3 }}>
+              <Button
+                type={balanceStaked ? "success" : "primary"}
+                onClick={() => {
+                  tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther("1.0") }));
+                }}
+              >
+                🥩 Stake 1.0 ether!
+              </Button>
+            </div>
+            <div style={{ padding: 3 }}>
+              Staked by you:
+              <Balance balance={balanceStaked} fontSize={64} />Ξ
+            </div>
+            <div style={{ padding: 3, marginTop: 9, fontWeight: "bold" }}>
+              <div>Withdrawal Period Left:</div>
+              {withdrawalTimeLeft && humanizeDuration(withdrawalTimeLeft.toNumber() * 1000)}
+            </div>
+            <div style={{ padding: 3 }}>
               <Button
                 type={"default"}
                 onClick={() => {
                   tx(writeContracts.Staker.withdraw());
                 }}
               >
-                🏧 Withdraw
+                🏧 Withdraw 💸
               </Button>
             </div>
-
-            <div style={{ padding: 8 }}>
+            <div style={{ padding: 3, marginTop: 9, fontWeight: "bold" }}>
+              <div>Claim Period Left:</div>
+              {claimPeriodLeft && humanizeDuration(claimPeriodLeft.toNumber() * 1000)}
+            </div>
+            <div style={{ padding: 3 }}>
               <Button
-                type={balanceStaked ? "success" : "primary"}
+                type={"\t"}
                 onClick={() => {
-                  tx(writeContracts.Staker.stake({ value: ethers.utils.parseEther("0.5") }));
+                  console.log("\t", " ⌛️ fast forward time...");
                 }}
               >
-                🥩 Stake 0.5 ether!
+                ⏳ Kill - Time! ⏳
               </Button>
             </div>
-
             {/*
                 🎛 this scaffolding is full of commonly used components
                 this <Contract/> component will automatically parse your ABI
                 and give you a form to interact with it locally
             */}
-
-            <div style={{ width: 500, margin: "auto", marginTop: 64 }}>
-              <div>Stake Events:</div>
-              <List
-                dataSource={stakeEvents}
-                renderItem={item => {
-                  return (
-                    <List.Item key={item.blockNumber}>
-                      <Address value={item.args[0]} ensProvider={mainnetProvider} fontSize={16} /> =>
-                      <Balance balance={item.args[1]} />
-                    </List.Item>
-                  );
-                }}
-              />
-            </div>
-
             {/* uncomment for a second contract:
             <Contract
               name="SecondContract"
@@ -620,7 +651,7 @@ function App(props) {
       <ThemeSwitch />
 
       {/* 👨‍💼 Your account is in the top right with a wallet at connect options */}
-      <div style={{ position: "fixed", textAlign: "right", right: 0, top: 0, padding: 10 }}>
+      <div style={{ position: "fixed", textAlign: "right", right: 18, top: 36, padding: 3 }}>
         <Account
           address={address}
           localProvider={localProvider}
@@ -635,55 +666,93 @@ function App(props) {
         {faucetHint}
       </div>
 
-      <div style={{ marginTop: 32, opacity: 0.5 }}>
-        {/* Add your address here */}
-        Created by <Address value={"Your...address"} ensProvider={mainnetProvider} fontSize={16} />
+      <div style={{ position: "fixed", textAlign: "center", left: 8, top: 150 }}>
+        <Button
+          type={"Lock"}
+          onClick={() => {
+            tx(writeContracts.Staker.execute());
+          }}
+          size="large"
+          shape="round"
+        >
+          🔒 Lock ETH to contract! ⛓
+        </Button>{" "}
       </div>
 
-      <div style={{ marginTop: 32, opacity: 0.5 }}>
-        <a target="_blank" style={{ padding: 32, color: "#000" }} href="https://github.com/scaffold-eth/scaffold-eth">
-          🍴 Fork me!
+      <div style={{ position: "fixed", textAlign: "center", left: 8, top: 200 }}>
+        <Button
+          type={"Claim"}
+          onClick={() => {
+            tx(writeContracts.Staker.claim());
+          }}
+          size="large"
+          shape="round"
+        >
+          Claim contract Balance! 💰
+        </Button>{" "}
+      </div>
+
+      <div style={{ position: "fixed", textAlign: "center", right: 10, bottom: 39 }}>
+        {/* Add your address here */}
+        Created by <Address value={"0x827516Eca72B5d226A542eD5884E4EffA50650D3"} ensProvider={mainnetProvider} />
+      </div>
+
+      <div style={{ position: "fixed", textAlign: "center", right: 99, bottom: 8 }}>
+        <a target="_blank" href="https://github.com/Mitchell45432/scaffold-eth-challenges" rel="noreferrer">
+          ─∈ Fork me!
         </a>
       </div>
 
       {/* 🗺 Extra UI like gas price, eth price, faucet, and support: */}
-      <div style={{ position: "fixed", textAlign: "left", left: 0, bottom: 20, padding: 10 }}>
-        <Row align="middle" gutter={[4, 4]}>
-          <Col span={8}>
-            <Ramp price={price} address={address} networks={NETWORKS} />
-          </Col>
-
-          <Col span={8} style={{ textAlign: "center", opacity: 0.8 }}>
-            <GasGauge gasPrice={gasPrice} />
-          </Col>
-          <Col span={8} style={{ textAlign: "center", opacity: 1 }}>
-            <Button
-              onClick={() => {
-                window.open("https://t.me/joinchat/KByvmRe5wkR-8F_zz6AjpA");
-              }}
-              size="large"
-              shape="round"
-            >
-              <span style={{ marginRight: 8 }} role="img" aria-label="support">
-                💬
-              </span>
-              Support
-            </Button>
-          </Col>
-        </Row>
-
-        <Row align="middle" gutter={[4, 4]}>
-          <Col span={24}>
-            {
-              /*  if the local provider has a signer, let's show the faucet:  */
-              faucetAvailable ? (
-                <Faucet localProvider={localProvider} price={price} ensProvider={mainnetProvider} />
-              ) : (
-                ""
-              )
-            }
-          </Col>
-        </Row>
+      <div style={{ position: "fixed", textAlign: "left", left: 6, top: 24 }}>
+        <a
+          style={{ position: "fixed", textAlign: "left", left: 12, top: 3, padding: 3 }}
+          target="_blank"
+          href="https://docs.web3j.io/4.8.7/transactions/transfer_eth/"
+          rel="noreferrer"
+        >
+          🐳 --- 💧 Local Faucet 💧 --- 🐳
+        </a>
+        <div style={{ position: "fixed", textAlign: "left", left: 6, top: 90, padding: 3 }}>
+          <Row align="middle" gutter={[4, 4]}>
+            <Col span={12}>
+              <Ramp price={price} address={address} networks={NETWORKS} />
+            </Col>
+            <Col span={12} style={{ textAlign: "right", opacity: 0.8 }}>
+              <GasGauge gasPrice={gasPrice} />
+            </Col>
+          </Row>
+        </div>
+        <div style={{ position: "fixed", textAlign: "left", left: 6, top: 24 }}>
+          <Row align="middle" gutter={[4, 4]}>
+            <Col span={19} aria-label="support">
+              {
+                /*  if the local provider has a signer, let's show the faucet:  */
+                faucetAvailable ? (
+                  <Faucet localProvider={localProvider} price={price} ensProvider={mainnetProvider} />
+                ) : (
+                  ""
+                )
+              }
+            </Col>
+          </Row>
+          <div style={{ position: "fixed", textAlign: "right", left: 8, bottom: 8 }}>
+            <Col span={8} style={{ textAlign: "center", opacity: 1 }}>
+              <Button
+                onClick={() => {
+                  window.open("https://t.me/joinchat/KByvmRe5wkR-8F_zz6AjpA");
+                }}
+                size="large"
+                shape="round"
+              >
+                <span style={{ marginRight: 12 }} role="img" aria-label="support">
+                  💬
+                </span>
+                Scafold-ETH (Deveploper Chat Group)
+              </Button>
+            </Col>
+          </div>
+        </div>
       </div>
     </div>
   );
